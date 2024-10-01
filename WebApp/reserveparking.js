@@ -3,8 +3,19 @@ const fs = require('fs');
 const port = 3000;
 const WebSocket = require('ws');
 
-const server = http.createServer(function(req, res){
-	if (req.url === '/'){
+// Firebase Admin SDK initialization
+const admin = require('firebase-admin');
+const serviceAccount = require('/home/edward/Desktop/Senior Project/WebApp/parking-reservation-syst-631f1-firebase-adminsdk-h4sj1-90621b3a08.json'); // Download this from Firebase Console
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: 'https://parking-reservation-syst-631f1-default-rtdb.firebaseio.com' // Your Firebase Realtime Database URL
+});
+
+const db = admin.database();
+
+const server = http.createServer(function (req, res) {
+    if (req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.write(`
 <!DOCTYPE html>
@@ -64,78 +75,100 @@ const server = http.createServer(function(req, res){
 </html>
         `);
         res.end();
-	}
-
+    }
 });
 
-const wss = new WebSocket.Server({ server:server });
+const wss = new WebSocket.Server({ server: server });
 
-//A client WebSocket broadcasting to all connected WebSocket clients, including itself.
+// A client WebSocket broadcasting to all connected WebSocket clients, including itself.
 const broadcast = (data) => {
     wss.clients.forEach(function each(client) {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(data);
-      }
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(data);
+        }
     });
-
 };
 
+// Function to update Firebase database
+const updateFirebase = (statusMessages) => {
+    const ref = db.ref('parkingStatus');
+    ref.set({
+        spots: statusMessages
+    }, (error) => {
+        if (error) {
+            console.error('Error updating Firebase:', error);
+        } else {
+            console.log('Firebase updated successfully');
+        }
+    });
+};
+
+// Watch the local file for changes and update Firebase
 fs.watch('/home/edward/Desktop/Senior Project/Data/Spot_One/parking_status.txt', (eventType, filename) => {
-  console.log(`event type is: ${eventType}`);
-  if(eventType === 'change'){
-try {
-    // Read the file and split it into lines
-    const data = fs.readFileSync('/home/edward/Desktop/Senior Project/Data/Spot_One/parking_status.txt', 'utf8');
-    const lines = data.split('\n');
-    
-    // Initialize an array to store the status messages
-    const statusMessages = [];
+    console.log(`event type is: ${eventType}`);
+    if (eventType === 'change') {
+        try {
+            // Read the file and split it into lines
+            const data = fs.readFileSync('/home/edward/Desktop/Senior Project/Data/Spot_One/parking_status.txt', 'utf8');
+            const lines = data.split('\n');
 
-    // Check each line according to your conditions
-    if (lines[0]) {  // Check first line
-        if (lines[0].includes('10')) {
-            statusMessages.push('Spot 1 Available');
-        } else if (lines[0].includes('11')) {
-            statusMessages.push('Spot 1 Unavailable');
+            // Initialize an array to store the status messages
+            const statusMessages = [];
+
+            // Check each line according to your conditions
+            if (lines[0]) {  // Check first line
+                if (lines[0].includes('10')) {
+                    statusMessages.push('Spot 1 Available');
+                } else if (lines[0].includes('11')) {
+                    statusMessages.push('Spot 1 Unavailable');
+                }
+            }
+
+            if (lines[1]) {  // Check second line
+                if (lines[1].includes('20')) {
+                    statusMessages.push('Spot 2 Available');
+                } else if (lines[1].includes('21')) {
+                    statusMessages.push('Spot 2 Unavailable');
+                }
+            }
+
+            if (lines[2]) {  // Check third line
+                if (lines[2].includes('30')) {
+                    statusMessages.push('Spot 3 Available');
+                } else if (lines[2].includes('31')) {
+                    statusMessages.push('Spot 3 Unavailable');
+                }
+            }
+
+            // Concatenate the status messages
+            const finalStatus = statusMessages.join(', ');
+
+            // Broadcast the final status message
+            broadcast(finalStatus);
+
+            // Update Firebase with the latest status
+            updateFirebase(statusMessages);
+
+        } catch (error) {
+            console.error('Error reading the file:', error.message);  // Log the error message
         }
     }
-
-    if (lines[1]) {  // Check second line
-        if (lines[1].includes('20')) {
-            statusMessages.push('Spot 2 Available');
-        } else if (lines[1].includes('21')) {
-            statusMessages.push('Spot 2 Unavailable');
-        }
-    }
-
-    if (lines[2]) {  // Check third line
-        if (lines[2].includes('30')) {
-            statusMessages.push('Spot 3 Available');
-        } else if (lines[2].includes('31')) {
-            statusMessages.push('Spot 3 Unavailable');
-        }
-    }
-
-    // Concatenate the status messages
-    const finalStatus = statusMessages.join(', ');
-
-    // Broadcast the final status message
-    broadcast(finalStatus);
-
-} catch (error) {
-    console.error('Error reading the file:', error.message);  // Log the error message
-}
-  }
-}); 
-
-
-server.listen(port, function(error){
-   if (error){
-    console.log('Something went wrong', error)
-   }else {
-    console.log('Server is listening on port ' + port)   
-
-   }  
 });
 
-            
+// Firebase listener to listen for changes in the database and broadcast it
+const ref = db.ref('parkingStatus');
+ref.on('value', (snapshot) => {
+    const data = snapshot.val();
+    if (data && data.spots) {
+        const statusMessages = data.spots.join(', ');
+        broadcast(statusMessages);
+    }
+});
+
+server.listen(port, function (error) {
+    if (error) {
+        console.log('Something went wrong', error);
+    } else {
+        console.log('Server is listening on port ' + port);
+    }
+});
