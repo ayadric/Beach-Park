@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parking Reservation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #parkingStatus {
+            display: flex;
+            flex-direction: column;
+        }
+        .parking-spot {
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .available {
+            background-color: #d4edda;
+            color: #155724;
+            border: 2px solid #155724;
+        }
+        .unavailable {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 2px solid #721c24;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:disabled {
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Parking Reservation</h1>
+    <div id="parkingStatus">Loading...</div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.20.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.20.0/firebase-database-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            databaseURL: "https://parking-reservation-syst-631f1-default-rtdb.firebaseio.com"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        } else {
+            firebase.app(); // If already initialized, use that one
+        }
+
+        const dbRef = firebase.database().ref('parkingSpots');
+
+        // Function to update parking status on the page
+        const updateParkingStatus = (status) => {
+            const parkingStatusDiv = document.getElementById('parkingStatus');
+            parkingStatusDiv.innerHTML = ''; // Clear the current content
+
+            for (const [spot, availability] of Object.entries(status)) {
+                const button = document.createElement('button');
+                button.className = 'parking-spot ' + (availability.toLowerCase());
+                button.innerText = `${spot}: ${availability}`;
+
+                // Enable reservation if the spot is available
+                if (availability === 'Available') {
+                    button.onclick = () => makeReservation(spot);
+                } else {
+                    button.disabled = true;
+                }
+
+                parkingStatusDiv.appendChild(button);
+            }
+        };
+
+        // Function to handle making a reservation
+        const makeReservation = (spot) => {
+            const confirmReservation = confirm(`Do you want to reserve ${spot}?`);
+            if (confirmReservation) {
+                // Update the parking spot status to "Unavailable"
+                const updates = {};
+                updates[spot] = 'Reserved';
+                dbRef.update(updates)
+                    .then(() => {
+                        alert(`${spot} has been reserved successfully!`);
+                    })
+                    .catch((error) => {
+                        console.error('Error making reservation:', error);
+                        alert('Failed to reserve the spot. Please try again.');
+                    });
+            }
+        };
+
+        // Listen for changes in parking status from Firebase
+        dbRef.on('value', (snapshot) => {
+            const parkingStatus = snapshot.val();
+            if (parkingStatus) {
+                updateParkingStatus(parkingStatus);
+            } else {
+                document.getElementById('parkingStatus').innerText = 'No parking data available.';
+            }
+        }, (error) => {
+            console.error('Error fetching data from Firebase:', error);
+            document.getElementById('parkingStatus').innerText = 'Error loading parking data.';
+        });
+    </script>
+</body>
+</html>
