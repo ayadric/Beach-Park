@@ -1,174 +1,154 @@
-const http = require('http');
-const fs = require('fs');
-const port = 3000;
-const WebSocket = require('ws');
-
-// Firebase Admin SDK initialization
+const net = require('net');
 const admin = require('firebase-admin');
-const serviceAccount = require('/home/edward/Desktop/Senior Project/WebApp/parking-reservation-syst-631f1-firebase-adminsdk-h4sj1-90621b3a08.json'); // Download this from Firebase Console
+
+// Initialize Firebase Admin SDK
+const serviceAccount = require('/home/edward/Desktop/Senior Project/WebApp/parking-reservation-syst-631f1-firebase-adminsdk-h4sj1-90621b3a08.json');
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: 'https://parking-reservation-syst-631f1-default-rtdb.firebaseio.com' // Your Firebase Realtime Database URL
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: 'https://parking-reservation-syst-631f1-default-rtdb.firebaseio.com/'
 });
 
-const db = admin.database();
+// Reference to your database path for parking spots
+const parkingRef = admin.database().ref('parkingSpots');
 
-const server = http.createServer(function (req, res) {
-    if (req.url === '/') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.write(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parking Status</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: teal;
-            color: white;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 20px;
-        }
-
-        p {
-            font-size: 1.5em;
-            padding: 10px 20px;
-            background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-
-        .container {
-            text-align: center;
-            background-color: rgba(0, 0, 0, 0.3);
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-    </style>
-    <script>
-        // Create WebSocket connection.
-        const ws = new WebSocket('ws://localhost:3000');
-        
-        ws.onmessage = function(event) {
-            document.getElementById('parking-status').innerText = event.data;
-        };
-    </script>
-</head>
-<body>
-    <div class="container">
-        <h1>Parking Spot Status</h1>
-        <p id="parking-status">Waiting for updates...</p>
-    </div>
-</body>
-</html>
-        `);
-        res.end();
-    }
-});
-
-const wss = new WebSocket.Server({ server: server });
-
-// A client WebSocket broadcasting to all connected WebSocket clients, including itself.
-const broadcast = (data) => {
-    wss.clients.forEach(function each(client) {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(data);
-        }
-    });
+// Define hex values and currentIndex for each port
+let portConfigs = {
+    5000: { hexValues: [0x01, 0x02, 0x03], currentIndex: 0 },
+    5001: { hexValues: [0x04, 0x05, 0x06], currentIndex: 0 },
 };
 
-// Function to update Firebase database
-const updateFirebase = (statusMessages) => {
-    const ref = db.ref('parkingStatus');
-    ref.set({
-        spots: statusMessages
-    }, (error) => {
-        if (error) {
-            console.error('Error updating Firebase:', error);
-        } else {
-            console.log('Firebase updated successfully');
-        }
-    });
-};
-
-// Watch the local file for changes and update Firebase
-fs.watch('/home/edward/Desktop/Senior Project/Data/Spot_One/parking_status.txt', (eventType, filename) => {
-    console.log(`event type is: ${eventType}`);
-    if (eventType === 'change') {
-        try {
-            // Read the file and split it into lines
-            const data = fs.readFileSync('/home/edward/Desktop/Senior Project/Data/Spot_One/parking_status.txt', 'utf8');
-            const lines = data.split('\n');
-
-            // Initialize an array to store the status messages
-            const statusMessages = [];
-
-            // Check each line according to your conditions
-            if (lines[0]) {  // Check first line
-                if (lines[0].includes('10')) {
-                    statusMessages.push('Spot 1 Available');
-                } else if (lines[0].includes('11')) {
-                    statusMessages.push('Spot 1 Unavailable');
-                }
-            }
-
-            if (lines[1]) {  // Check second line
-                if (lines[1].includes('20')) {
-                    statusMessages.push('Spot 2 Available');
-                } else if (lines[1].includes('21')) {
-                    statusMessages.push('Spot 2 Unavailable');
-                }
-            }
-
-            if (lines[2]) {  // Check third line
-                if (lines[2].includes('30')) {
-                    statusMessages.push('Spot 3 Available');
-                } else if (lines[2].includes('31')) {
-                    statusMessages.push('Spot 3 Unavailable');
-                }
-            }
-
-            // Concatenate the status messages
-            const finalStatus = statusMessages.join(', ');
-
-            // Broadcast the final status message
-            broadcast(finalStatus);
-
-            // Update Firebase with the latest status
-            updateFirebase(statusMessages);
-
-        } catch (error) {
-            console.error('Error reading the file:', error.message);  // Log the error message
-        }
-    }
-});
-
-// Firebase listener to listen for changes in the database and broadcast it
-const ref = db.ref('parkingStatus');
-ref.on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data && data.spots) {
-        const statusMessages = data.spots.join(', ');
-        broadcast(statusMessages);
-    }
-});
-
-server.listen(port, function (error) {
-    if (error) {
-        console.log('Something went wrong', error);
+// Function to send the next hex value
+const sendNextHexValue = (socket, port) => {
+    const config = portConfigs[port];
+    if (config.currentIndex < config.hexValues.length) {
+        const hexValue = config.hexValues[config.currentIndex];
+        const buffer = Buffer.from([hexValue]);
+        socket.write(buffer);
+        console.log(`Port ${port} - Sent hex value: 0x${hexValue.toString(16).toUpperCase()}`);
+        config.currentIndex++;
     } else {
-        console.log('Server is listening on port ' + port);
+        console.log(`Port ${port} - All hex values have been sent.`);
+        // Reset currentIndex to start sending hex values again
+        config.currentIndex = 0; // Reset index to allow repeating
+        // Optionally send the first hex value again after resetting
+        sendNextHexValue(socket, port); // Start again immediately after reset
     }
-});
+};
+
+// Function to update parking status based on the received hex value
+const updateParkingStatus = (intValue) => {
+    let parkingStatus = {};
+
+    // Check which parking spot the value corresponds to and whether it's available or not
+    switch (intValue) {
+        case 10:
+            parkingStatus = { Spot1: 'Available' };
+            break;
+        case 11:
+            parkingStatus = { Spot1: 'Unavailable' };
+            break;
+        case 20:
+            parkingStatus = { Spot2: 'Available' };
+            break;
+        case 21:
+            parkingStatus = { Spot2: 'Unavailable' };
+            break;
+        case 30:
+            parkingStatus = { Spot3: 'Available' };
+            break;
+        case 31:
+            parkingStatus = { Spot3: 'Unavailable' };
+            break;
+        case 40:
+            parkingStatus = { Spot4: 'Available' };
+            break;
+        case 41:
+            parkingStatus = { Spot4: 'Unavailable' };
+            break;
+        case 50:
+            parkingStatus = { Spot5: 'Available' };
+            break;
+        case 51:
+            parkingStatus = { Spot5: 'Unavailable' };
+            break;
+        case 60:
+            parkingStatus = { Spot6: 'Available' };
+            break;
+        case 61:
+            parkingStatus = { Spot6: 'Unavailable' };
+            break;
+        default:
+            console.log('Received an unknown value:', intValue);
+            return;
+    }
+
+    parkingRef.once('value').then((snapshot) => {
+        if (!snapshot.exists()) {
+            console.log('Creating parkingSpots path in Firebase.');
+            return parkingRef.set({
+                Spot1: 'available',
+                Spot2: 'available',
+                Spot3: 'available',
+                Spot4: 'available',
+                Spot5: 'available',
+                Spot6: 'available'
+            });
+        }
+    }).then(() => {
+        return parkingRef.update(parkingStatus);
+    }).then(() => {
+        console.log('Parking status updated in Firebase:', parkingStatus);
+    }).catch((error) => {
+        console.error('Error updating Firebase:', error);
+    });
+};
+
+// Create a server for each port
+const createServer = (port) => {
+    const server = net.createServer((socket) => {
+        console.log(`Client connected on port ${port}.`);
+
+        // Immediately send the first hex value after connection
+        sendNextHexValue(socket, port);
+
+        let waitingForData = false;
+
+        // Handle data reception
+        socket.on('data', (data) => {
+            if (!waitingForData) {
+                waitingForData = true; // Set the flag to true while we are handling data
+                const hexString = data.toString('hex');
+                const intValue = parseInt(hexString, 16);
+                console.log(`Port ${port} - Received data: ${hexString}`);
+                console.log(`Port ${port} - Converted to int: ${intValue}`);
+
+                // Update parking status based on the received value
+                updateParkingStatus(intValue);
+
+                // After receiving data, send the next hex value
+                sendNextHexValue(socket, port);
+                waitingForData = false; // Reset the flag
+            }
+        });
+
+        // Handle client disconnect
+        socket.on('end', () => {
+            console.log(`Client disconnected from port ${port}.`);
+        });
+
+        // Handle errors
+        socket.on('error', (err) => {
+            console.error(`Port ${port} - Socket error:`, err);
+        });
+    });
+
+    // Start the server
+    server.listen(port, '192.168.1.150', () => {
+        console.log(`Server listening on port ${port}.`);
+    });
+};
+
+// Create servers for each port
+createServer(5000);
+createServer(5001);
