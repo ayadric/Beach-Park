@@ -39,64 +39,85 @@ const sendNextHexValue = (socket, port) => {
 // Function to update parking status based on the received hex value
 const updateParkingStatus = (intValue) => {
     let parkingStatus = {};
+    let spotToUpdate = null;
 
-    // Check which parking spot the value corresponds to and whether it's available or not
+    // Determine which parking spot corresponds to the received value
     switch (intValue) {
         case 10:
             parkingStatus = { Spot1: 'Available' };
+            spotToUpdate = 'Spot1';
             break;
         case 11:
             parkingStatus = { Spot1: 'Unavailable' };
+            spotToUpdate = 'Spot1';
             break;
         case 20:
             parkingStatus = { Spot2: 'Available' };
+            spotToUpdate = 'Spot2';
             break;
         case 21:
             parkingStatus = { Spot2: 'Unavailable' };
+            spotToUpdate = 'Spot2';
             break;
         case 30:
             parkingStatus = { Spot3: 'Available' };
+            spotToUpdate = 'Spot3';
             break;
         case 31:
             parkingStatus = { Spot3: 'Unavailable' };
+            spotToUpdate = 'Spot3';
             break;
         case 40:
             parkingStatus = { Spot4: 'Available' };
+            spotToUpdate = 'Spot4';
             break;
         case 41:
             parkingStatus = { Spot4: 'Unavailable' };
+            spotToUpdate = 'Spot4';
             break;
         case 50:
             parkingStatus = { Spot5: 'Available' };
+            spotToUpdate = 'Spot5';
             break;
         case 51:
             parkingStatus = { Spot5: 'Unavailable' };
+            spotToUpdate = 'Spot5';
             break;
         case 60:
             parkingStatus = { Spot6: 'Available' };
+            spotToUpdate = 'Spot6';
             break;
         case 61:
             parkingStatus = { Spot6: 'Unavailable' };
+            spotToUpdate = 'Spot6';
             break;
         default:
             console.log('Received an unknown value:', intValue);
             return;
     }
 
+    // Retrieve the current status of parking spots from Firebase
     parkingRef.once('value').then((snapshot) => {
         if (!snapshot.exists()) {
             console.log('Creating parkingSpots path in Firebase.');
             return parkingRef.set({
-                Spot1: 'available',
-                Spot2: 'available',
-                Spot3: 'available',
-                Spot4: 'available',
-                Spot5: 'available',
-                Spot6: 'available'
+                Spot1: 'Available',
+                Spot2: 'Available',
+                Spot3: 'Available',
+                Spot4: 'Available',
+                Spot5: 'Available',
+                Spot6: 'Available'
             });
+        } else {
+            const currentStatus = snapshot.val();
+            // Check if the spot is reserved
+            if (currentStatus[spotToUpdate] && currentStatus[spotToUpdate] !== 'Reserved') {
+                return parkingRef.update(parkingStatus);
+            } else {
+                console.log(`Spot ${spotToUpdate} is reserved. No update performed.`);
+                return Promise.resolve(); // Skip the update
+            }
         }
-    }).then(() => {
-        return parkingRef.update(parkingStatus);
     }).then(() => {
         console.log('Parking status updated in Firebase:', parkingStatus);
     }).catch((error) => {
