@@ -28,6 +28,16 @@ const reservedHexValues = {
     Spot6: 0x3E
 };
 
+// Uneserve hex values for each spot
+const unreserveHexValues = {
+    Spot1: 0x0D,
+    Spot2: 0x17,
+    Spot3: 0x21,
+    Spot4: 0x2B,
+    Spot5: 0x35,
+    Spot6: 0x3F
+};
+
 // Mapping of integer values to parking status
 const statusMapping = {
     10: 'Available', 11: 'Unavailable',
@@ -70,7 +80,7 @@ const sendNextHexValue = async (socket, port) => {
 
             // Mark the reservation value as sent
             config.sentReservations[currentSpot] = true;
-        } else if (!isReserved) {
+        } else {//if (!isReserved) {
             const buffer = Buffer.from([config.hexValues[config.currentIndex]]);
             socket.write(buffer);
             console.log(`Port ${port} - Sent hex value: 0x${config.hexValues[config.currentIndex].toString(16).toUpperCase()} for ${currentSpot}`);
@@ -114,8 +124,21 @@ const createServer = (port) => {
         }, 1000); // Adjust the interval as needed
 
         socket.on('data', async (data) => {
-            const intValue = parseInt(data.toString('hex'), 16);
+			const config = portConfigs[port];
+			const currentSpot = config.spots[config.currentIndex % config.spots.length];
+            let intValue = parseInt(data.toString('hex'), 16);
             console.log(`Port ${port} - Received data: ${data.toString('hex')} - Converted to int: ${intValue}`);
+            
+            if(intValue==13){
+				intValue=10;
+				config.sentReservations[currentSpot] = false;
+			}else if(intValue==23){
+				intValue=20;
+				config.sentReservations[currentSpot] = false;
+			}else if(intValue==33){
+				intValue=30;
+				config.sentReservations[currentSpot] = false;
+			}
 
             // Update parking status based on the received value
             await updateParkingStatus(intValue);
