@@ -12,117 +12,84 @@ admin.initializeApp({
 // Reference to your database path for parking spots
 const parkingRef = admin.database().ref('parkingSpots');
 
-// Define hex values and currentIndex for each port
-let portConfigs = {
-    5000: { hexValues: [0x01, 0x02, 0x03], currentIndex: 0 },
-    5001: { hexValues: [0x04, 0x05, 0x06], currentIndex: 0 },
+// Define hex values and configuration for each port
+const portConfigs = {
+    5000: { hexValues: [0x01, 0x02, 0x03], currentIndex: 0, spots: ['Spot1', 'Spot2', 'Spot3'] },
+    5001: { hexValues: [0x04, 0x05, 0x06], currentIndex: 0, spots: ['Spot4', 'Spot5', 'Spot6'] },
+};
+
+// Reserved hex values for each spot
+const reservedHexValues = {
+    Spot1: 0x0C,
+    Spot2: 0x16,
+    Spot3: 0x20,
+    Spot4: 0x2A,
+    Spot5: 0x34,
+    Spot6: 0x3E
+};
+
+// Mapping of integer values to parking status
+const statusMapping = {
+    10: 'Available', 11: 'Unavailable',
+    20: 'Available', 21: 'Unavailable',
+    30: 'Available', 31: 'Unavailable',
+    40: 'Available', 41: 'Unavailable',
+    50: 'Available', 51: 'Unavailable',
+    60: 'Available', 61: 'Unavailable'
+};
+
+// Cache to store reservation statuses
+const reservationCache = {};
+
+// Function to check reservation status with caching
+const checkReservationStatus = async (currentSpot) => {
+    if (reservationCache[currentSpot]) {
+        return reservationCache[currentSpot];
+    }
+
+    const snapshot = await parkingRef.child(currentSpot).once('value');
+    const isReserved = snapshot.val() === 'Reserved';
+    reservationCache[currentSpot] = isReserved; // Cache the result
+    return isReserved;
 };
 
 // Function to send the next hex value
-const sendNextHexValue = (socket, port) => {
+const sendNextHexValue = async (socket, port) => {
     const config = portConfigs[port];
-    if (config.currentIndex < config.hexValues.length) {
-        const hexValue = config.hexValues[config.currentIndex];
+    const currentSpot = config.spots[config.currentIndex % config.spots.length];
+
+    try {
+        const isReserved = await checkReservationStatus(currentSpot);
+        const hexValue = isReserved ? reservedHexValues[currentSpot] : config.hexValues[config.currentIndex];
         const buffer = Buffer.from([hexValue]);
         socket.write(buffer);
-        console.log(`Port ${port} - Sent hex value: 0x${hexValue.toString(16).toUpperCase()}`);
-        config.currentIndex++;
-    } else {
-        console.log(`Port ${port} - All hex values have been sent.`);
-        // Reset currentIndex to start sending hex values again
-        config.currentIndex = 0; // Reset index to allow repeating
-        // Optionally send the first hex value again after resetting
-        sendNextHexValue(socket, port); // Start again immediately after reset
+        console.log(`Port ${port} - Sent hex value: 0x${hexValue.toString(16).toUpperCase()} for ${currentSpot}`);
+
+        // Move to the next index
+        config.currentIndex = (config.currentIndex + 1) % config.hexValues.length;
+    } catch (error) {
+        console.error('Error checking reservation status:', error);
     }
 };
 
 // Function to update parking status based on the received hex value
-const updateParkingStatus = (intValue) => {
-    let parkingStatus = {};
-    let spotToUpdate = null;
-
-    // Determine which parking spot corresponds to the received value
-    switch (intValue) {
-        case 10:
-            parkingStatus = { Spot1: 'Available' };
-            spotToUpdate = 'Spot1';
-            break;
-        case 11:
-            parkingStatus = { Spot1: 'Unavailable' };
-            spotToUpdate = 'Spot1';
-            break;
-        case 20:
-            parkingStatus = { Spot2: 'Available' };
-            spotToUpdate = 'Spot2';
-            break;
-        case 21:
-            parkingStatus = { Spot2: 'Unavailable' };
-            spotToUpdate = 'Spot2';
-            break;
-        case 30:
-            parkingStatus = { Spot3: 'Available' };
-            spotToUpdate = 'Spot3';
-            break;
-        case 31:
-            parkingStatus = { Spot3: 'Unavailable' };
-            spotToUpdate = 'Spot3';
-            break;
-        case 40:
-            parkingStatus = { Spot4: 'Available' };
-            spotToUpdate = 'Spot4';
-            break;
-        case 41:
-            parkingStatus = { Spot4: 'Unavailable' };
-            spotToUpdate = 'Spot4';
-            break;
-        case 50:
-            parkingStatus = { Spot5: 'Available' };
-            spotToUpdate = 'Spot5';
-            break;
-        case 51:
-            parkingStatus = { Spot5: 'Unavailable' };
-            spotToUpdate = 'Spot5';
-            break;
-        case 60:
-            parkingStatus = { Spot6: 'Available' };
-            spotToUpdate = 'Spot6';
-            break;
-        case 61:
-            parkingStatus = { Spot6: 'Unavailable' };
-            spotToUpdate = 'Spot6';
-            break;
-        default:
-            console.log('Received an unknown value:', intValue);
-            return;
+const updateParkingStatus = async (intValue) => {
+    const status = statusMapping[intValue];
+    if (!status) {
+        console.log('Received an unknown value:', intValue);
+        return;
     }
 
-    // Retrieve the current status of parking spots from Firebase
-    parkingRef.once('value').then((snapshot) => {
-        if (!snapshot.exists()) {
-            console.log('Creating parkingSpots path in Firebase.');
-            return parkingRef.set({
-                Spot1: 'Available',
-                Spot2: 'Available',
-                Spot3: 'Available',
-                Spot4: 'Available',
-                Spot5: 'Available',
-                Spot6: 'Available'
-            });
-        } else {
-            const currentStatus = snapshot.val();
-            // Check if the spot is reserved
-            if (currentStatus[spotToUpdate] && currentStatus[spotToUpdate] !== 'Reserved') {
-                return parkingRef.update(parkingStatus);
-            } else {
-                console.log(`Spot ${spotToUpdate} is reserved. No update performed.`);
-                return Promise.resolve(); // Skip the update
-            }
-        }
-    }).then(() => {
+    const spotToUpdate = `Spot${intValue / 10 | 0}`; // Determine the spot based on intValue
+    const parkingStatus = { [spotToUpdate]: status };
+
+    // Update the parking status in Firebase
+    try {
+        await parkingRef.update(parkingStatus);
         console.log('Parking status updated in Firebase:', parkingStatus);
-    }).catch((error) => {
+    } catch (error) {
         console.error('Error updating Firebase:', error);
-    });
+    }
 };
 
 // Create a server for each port
@@ -130,46 +97,33 @@ const createServer = (port) => {
     const server = net.createServer((socket) => {
         console.log(`Client connected on port ${port}.`);
 
-        // Immediately send the first hex value after connection
-        sendNextHexValue(socket, port);
+        // Continuously send hex values at intervals
+        const interval = setInterval(() => {
+            sendNextHexValue(socket, port);
+        }, 1000); // Adjust the interval as needed
 
-        let waitingForData = false;
+        socket.on('data', async (data) => {
+            const intValue = parseInt(data.toString('hex'), 16);
+            console.log(`Port ${port} - Received data: ${data.toString('hex')} - Converted to int: ${intValue}`);
 
-        // Handle data reception
-        socket.on('data', (data) => {
-            if (!waitingForData) {
-                waitingForData = true; // Set the flag to true while we are handling data
-                const hexString = data.toString('hex');
-                const intValue = parseInt(hexString, 16);
-                console.log(`Port ${port} - Received data: ${hexString}`);
-                console.log(`Port ${port} - Converted to int: ${intValue}`);
-
-                // Update parking status based on the received value
-                updateParkingStatus(intValue);
-
-                // After receiving data, send the next hex value
-                sendNextHexValue(socket, port);
-                waitingForData = false; // Reset the flag
-            }
+            // Update parking status based on the received value
+            await updateParkingStatus(intValue);
         });
 
-        // Handle client disconnect
+        socket.on('error', (err) => {
+            console.error(`Socket error on port ${port}:`, err);
+        });
+
         socket.on('end', () => {
             console.log(`Client disconnected from port ${port}.`);
-        });
-
-        // Handle errors
-        socket.on('error', (err) => {
-            console.error(`Port ${port} - Socket error:`, err);
+            clearInterval(interval); // Stop sending hex values if the client disconnects
         });
     });
 
-    // Start the server
-    server.listen(port, '192.168.1.150', () => {
-        console.log(`Server listening on port ${port}.`);
+    server.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
     });
 };
 
-// Create servers for each port
-createServer(5000);
-createServer(5001);
+// Create servers for all defined ports
+Object.keys(portConfigs).forEach(createServer);
