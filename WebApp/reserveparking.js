@@ -14,8 +14,8 @@ const parkingRef = admin.database().ref('parkingSpots');
 
 // Define hex values and configuration for each port
 const portConfigs = {
-    5000: { hexValues: [0x01, 0x02, 0x03], currentIndex: 0, spots: ['Spot1', 'Spot2', 'Spot3'] },
-    5001: { hexValues: [0x04, 0x05, 0x06], currentIndex: 0, spots: ['Spot4', 'Spot5', 'Spot6'] },
+    5000: { hexValues: [0x01, 0x02, 0x03], currentIndex: 0, spots: ['Spot1', 'Spot2', 'Spot3'], sentReservations: {} },
+    5001: { hexValues: [0x04, 0x05, 0x06], currentIndex: 0, spots: ['Spot4', 'Spot5', 'Spot6'], sentReservations: {} },
 };
 
 // Reserved hex values for each spot
@@ -61,9 +61,20 @@ const sendNextHexValue = async (socket, port) => {
     try {
         const isReserved = await checkReservationStatus(currentSpot);
         const hexValue = isReserved ? reservedHexValues[currentSpot] : config.hexValues[config.currentIndex];
-        const buffer = Buffer.from([hexValue]);
-        socket.write(buffer);
-        console.log(`Port ${port} - Sent hex value: 0x${hexValue.toString(16).toUpperCase()} for ${currentSpot}`);
+
+        // Send the hex value only if it's not already sent for a reserved spot
+        if (isReserved && !config.sentReservations[currentSpot]) {
+            const buffer = Buffer.from([hexValue]);
+            socket.write(buffer);
+            console.log(`Port ${port} - Sent hex value: 0x${hexValue.toString(16).toUpperCase()} for ${currentSpot}`);
+
+            // Mark the reservation value as sent
+            config.sentReservations[currentSpot] = true;
+        } else if (!isReserved) {
+            const buffer = Buffer.from([config.hexValues[config.currentIndex]]);
+            socket.write(buffer);
+            console.log(`Port ${port} - Sent hex value: 0x${config.hexValues[config.currentIndex].toString(16).toUpperCase()} for ${currentSpot}`);
+        }
 
         // Move to the next index
         config.currentIndex = (config.currentIndex + 1) % config.hexValues.length;
