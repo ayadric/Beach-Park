@@ -124,21 +124,26 @@ const createServer = (port) => {
         }, 1000); // Adjust the interval as needed
 
         socket.on('data', async (data) => {
+			const port = 5000;
 			const config = portConfigs[port];
-			const currentSpot = config.spots[config.currentIndex % config.spots.length];
+			//const currentSpot = config.spots[config.currentIndex % config.spots.length];
+			
             let intValue = parseInt(data.toString('hex'), 16);
             console.log(`Port ${port} - Received data: ${data.toString('hex')} - Converted to int: ${intValue}`);
             
-            if(intValue==13){
-				intValue=10;
-				config.sentReservations[currentSpot] = false;
-			}else if(intValue==23){
-				intValue=20;
-				config.sentReservations[currentSpot] = false;
-			}else if(intValue==33){
-				intValue=30;
-				config.sentReservations[currentSpot] = false;
-			}
+			// Loop through each spot and check conditions
+			config.spots.forEach((spotName, index) => {
+				if (intValue === 11 && config.sentReservations[spotName]) {
+					config.sentReservations[spotName] = false;
+					reservationCache[spotName] = false;
+				}else if(intValue === 21 && config.sentReservations[spotName]){
+				    config.sentReservations[spotName] = false;
+					reservationCache[spotName] = false;
+				}else if(intValue === 31 && config.sentReservations[spotName]){
+					config.sentReservations[spotName] = false;
+					reservationCache[spotName] = false;
+				}
+			});
 
             // Update parking status based on the received value
             await updateParkingStatus(intValue);
