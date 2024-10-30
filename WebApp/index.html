@@ -5,43 +5,90 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parking Reservation</title>
     <style>
-        body {
+        /* Overall background and body styling */
+        html, body {
+            background-color: #fdf6e3; /* Soft cream background */
+            margin: 0;
+            padding: 0;
             font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        #parkingStatus {
+            color: #333;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
+
+        /* Main content container */
+        .container {
+            background-color: #ffffff; /* White background for the content area */
+            width: 90%;
+            max-width: 600px;
+            padding: 30px;
+            box-shadow: 0px 8px 20px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        #parkingStatus {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        /* Parking spot button style */
         .parking-spot {
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-        .available {
-            background-color: #d4edda;
-            color: #155724;
-            border: 2px solid #155724;
-        }
-        .unavailable {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 2px solid #721c24;
-        }
-        button {
-            width: 100%;
+            font-size: 1em;
             padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            border: none;
+        }
+
+        .available {
+            background-color: #e8f5e9; /* Light green background for available */
+            color: #2e7d32; /* Darker green text */
+            border: 2px solid #2e7d32;
+        }
+
+        .unavailable {
+            background-color: #ffebee; /* Light red for unavailable */
+            color: #c62828; /* Dark red text */
+            border: 2px solid #c62828;
+        }
+
+        /* Reservation button style */
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
+
         button:disabled {
             cursor: not-allowed;
+            opacity: 0.7;
         }
     </style>
 </head>
 <body>
-    <h1>Parking Reservation</h1>
-    <div id="parkingStatus">Loading...</div>
+    <div class="container">
+        <h1>Parking Reservation</h1>
+        <div id="parkingStatus">Loading...</div>
+    </div>
 
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.20.0/firebase-app-compat.js"></script>
@@ -57,7 +104,7 @@
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         } else {
-            firebase.app(); // If already initialized, use that one
+            firebase.app();
         }
 
         const dbRef = firebase.database().ref('parkingSpots');
@@ -87,7 +134,6 @@
         const makeReservation = (spot) => {
             const confirmReservation = confirm(`Do you want to reserve ${spot}?`);
             if (confirmReservation) {
-                // Update the parking spot status to "Unavailable"
                 const updates = {};
                 updates[spot] = 'Reserved';
                 dbRef.update(updates)
