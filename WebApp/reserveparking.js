@@ -124,25 +124,43 @@ const createServer = (port) => {
         }, 1000); // Adjust the interval as needed
 
         socket.on('data', async (data) => {
-			const port = 5000;
-			const config = portConfigs[port];
-			//const currentSpot = config.spots[config.currentIndex % config.spots.length];
 			
             let intValue = parseInt(data.toString('hex'), 16);
             console.log(`Port ${port} - Received data: ${data.toString('hex')} - Converted to int: ${intValue}`);
             
-			// Loop through each spot and check conditions
-			config.spots.forEach((spotName, index) => {
-				if (intValue === 11 && config.sentReservations[spotName]) {
-					config.sentReservations[spotName] = false;
-					reservationCache[spotName] = false;
-				}else if(intValue === 21 && config.sentReservations[spotName]){
-				    config.sentReservations[spotName] = false;
-					reservationCache[spotName] = false;
-				}else if(intValue === 31 && config.sentReservations[spotName]){
-					config.sentReservations[spotName] = false;
-					reservationCache[spotName] = false;
-				}
+			// Loop through each port in portConfigs
+			Object.keys(portConfigs).forEach(port => {
+				const config = portConfigs[port];
+				console.log(`Checking conditions for port ${port}`);
+    
+				// Loop through each spot within the current port's config
+				config.spots.forEach((spotName) => {
+					if (intValue === 11 && config.sentReservations[spotName]) {
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}else if(intValue === 21 && config.sentReservations[spotName]){
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}else if(intValue === 31 && config.sentReservations[spotName]){
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}else if(intValue === 41 && config.sentReservations[spotName]){
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}else if(intValue === 51 && config.sentReservations[spotName]){
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}else if(intValue === 61 && config.sentReservations[spotName]){
+						console.log(`Test for ${spotName}`); // Logs for each spot where the condition is true
+						config.sentReservations[spotName] = false;
+						reservationCache[spotName] = false;
+					}
+				});
 			});
 
             // Update parking status based on the received value
